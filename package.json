@@ -1,6 +1,6 @@
 {
   "name": "antigravity-cn-toolkit",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Google Antigravity 彻底全中文汉化、免 TUN 模式出海网络配置与零维护自愈工具箱",
   "main": "src/index.js",
   "bin": {
