@@ -18,7 +18,7 @@ async function main() {
     console.log('\n');
 
     // 步骤二：双轨制汉化注入与 ASAR 持久化打包
-    runI18n();
+    await runI18n();
     console.log('\n');
 
     // 步骤三：官方原厂快捷方式合规治理

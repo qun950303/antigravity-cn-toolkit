@@ -287,11 +287,12 @@ Set-ItemProperty -Path $key -Name 'PendingFileRenameOperations' -Value @($source
   execSync(`powershell -ExecutionPolicy Bypass -Command "${psCmd.replace(/\n/g, '; ')}"`, { stdio: 'ignore' });
 }
 
-function triggerLiveHotPatch() {
+async function triggerLiveHotPatch(dict) {
   const candidatePorts = [];
   const portFiles = [
     path.join(appData, 'Antigravity', 'DevToolsActivePort'),
-    path.join(appData, 'Antigravity - Insiders', 'DevToolsActivePort')
+    path.join(appData, 'Antigravity - Insiders', 'DevToolsActivePort'),
+    path.join(localAppData, 'Programs', 'antigravity', 'DevToolsActivePort')
   ];
 
   for (const pf of portFiles) {
@@ -299,25 +300,174 @@ function triggerLiveHotPatch() {
       try {
         const raw = fs.readFileSync(pf, 'utf8').trim();
         const p = parseInt(raw.split(/\r?\n/)[0], 10);
-        if (p > 0) candidatePorts.push(p);
+        if (p > 0 && !candidatePorts.includes(p)) candidatePorts.push(p);
       } catch (e) {}
     }
   }
   candidatePorts.push(9222, 1512);
 
-  // 尝试连接并通知现存的 theme-patch 工具或直接完成热注入
-  const installCli = path.join(homeDir, '.gemini', 'antigravity', 'theme-patch', 'install.mjs');
-  if (fs.existsSync(installCli)) {
+  let activePort = null;
+  let targets = null;
+
+  for (const p of candidatePorts) {
     try {
-      execSync(`node "${installCli}" build-manifest`, { stdio: 'ignore' });
-      const out = execSync(`node "${installCli}" verify`, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
-      return out.includes('"ok": true');
+      targets = await new Promise((resolve, reject) => {
+        const req = http.get(`http://127.0.0.1:${p}/json`, (res) => {
+          let data = '';
+          res.on('data', c => data += c);
+          res.on('end', () => {
+            try { resolve(JSON.parse(data)); } catch (e) { reject(e); }
+          });
+        });
+        req.on('error', reject);
+        req.setTimeout(800, () => { req.destroy(); reject(new Error('timeout')); });
+      });
+      if (Array.isArray(targets) && targets.length > 0) {
+        activePort = p;
+        break;
+      }
     } catch (e) {}
   }
-  return false;
+
+  if (!activePort || !targets) return false;
+
+  const pages = targets.filter(t => t.type === 'page' && !t.url.startsWith('data:text/html,') && t.webSocketDebuggerUrl);
+  if (pages.length === 0) return false;
+
+  const injectorCode = `
+    (function() {
+      const DICT = ${JSON.stringify(dict)};
+      const EXCLUDE_SELECTOR = 'code, pre, kbd, samp, textarea, input, style, script, noscript, [contenteditable="true"], .prose, .markdown, [class*="chat-message"], [class*="group/file-title"], [data-testid="conversation-row-sidebar"] a[href^="/c/"], [data-testid="conversation-row-sidebar"] span.truncate';
+      const RE_HAS_ALPHA = /[a-zA-Z]/;
+      const RE_VERSION = /^Version\\\\s+([0-9\\\\.\\\\-a-zA-Z]+)$/i;
+
+      function isExcluded(el) {
+        if (!el || el.nodeType !== 1) return true;
+        return !!el.closest(EXCLUDE_SELECTOR);
+      }
+
+      function translateText(raw) {
+        if (!raw) return null;
+        const trimmed = raw.trim();
+        if (!trimmed) return null;
+        let repl = DICT[trimmed];
+        if (typeof repl !== 'string' && trimmed.endsWith('.')) {
+          const withoutDot = DICT[trimmed.slice(0, -1)];
+          if (typeof withoutDot === 'string') {
+            repl = withoutDot.endsWith('。') ? withoutDot : withoutDot + '。';
+          }
+        }
+        if (typeof repl === 'string') return raw.replace(trimmed, repl);
+        if (!RE_HAS_ALPHA.test(trimmed)) return null;
+        if (RE_VERSION.test(trimmed)) return raw.replace(RE_VERSION, '版本 $1');
+        return null;
+      }
+
+      function translateNode(node) {
+        if (!node) return;
+        if (node.nodeType === 3) {
+          if (node.parentElement && isExcluded(node.parentElement)) return;
+          const t = translateText(node.nodeValue);
+          if (t && t !== node.nodeValue) node.nodeValue = t;
+          return;
+        }
+        if (node.nodeType === 1) {
+          if (isExcluded(node)) return;
+          for (const attr of ['title', 'placeholder', 'aria-label']) {
+            if (node.hasAttribute(attr)) {
+              const t = translateText(node.getAttribute(attr));
+              if (t) node.setAttribute(attr, t);
+            }
+          }
+        }
+      }
+
+      function walk(el) {
+        if (!el || isExcluded(el)) return;
+        translateNode(el);
+        const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, {
+          acceptNode: (n) => (n.parentElement && isExcluded(n.parentElement)) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT
+        });
+        while (walker.nextNode()) {
+          translateNode(walker.currentNode);
+        }
+      }
+
+      walk(document.documentElement);
+
+      if (!window.__AGY_TRANSLATOR_ACTIVE) {
+        window.__AGY_TRANSLATOR_ACTIVE = true;
+        let scheduled = false;
+        const pendingNodes = new Set();
+        function queueWalk(n) {
+          pendingNodes.add(n);
+          if (!scheduled) {
+            scheduled = true;
+            requestAnimationFrame(() => {
+              scheduled = false;
+              const list = Array.from(pendingNodes);
+              pendingNodes.clear();
+              for (const node of list) {
+                try { walk(node); } catch(e) {}
+              }
+            });
+          }
+        }
+
+        const obs = new MutationObserver((mutations) => {
+          for (const m of mutations) {
+            if (m.type === 'childList') {
+              for (let i = 0; i < m.addedNodes.length; i++) queueWalk(m.addedNodes[i]);
+            } else if (m.type === 'characterData') {
+              translateNode(m.target);
+            } else if (m.type === 'attributes') {
+              translateNode(m.target);
+            }
+          }
+        });
+        obs.observe(document.documentElement, {
+          childList: true,
+          subtree: true,
+          characterData: true,
+          attributes: true,
+          attributeFilter: ['title', 'placeholder', 'aria-label']
+        });
+      }
+      return true;
+    })()
+  `;
+
+  let injectedAny = false;
+  for (const page of pages) {
+    try {
+      await new Promise((resolve) => {
+        const ws = new WebSocket(page.webSocketDebuggerUrl);
+        const timer = setTimeout(() => { try { ws.close(); } catch(e){} resolve(); }, 1500);
+        ws.onopen = () => {
+          ws.send(JSON.stringify({
+            id: 1,
+            method: 'Runtime.evaluate',
+            params: { expression: injectorCode }
+          }));
+        };
+        ws.onmessage = (e) => {
+          clearTimeout(timer);
+          injectedAny = true;
+          try { ws.close(); } catch(e){}
+          resolve();
+        };
+        ws.onerror = () => {
+          clearTimeout(timer);
+          resolve();
+        };
+      });
+    } catch (e) {}
+  }
+
+  return injectedAny;
 }
 
-function run() {
+async function run() {
   console.log('========================================');
   console.log('  Antigravity 全中文汉化套件执行引擎');
   console.log('========================================\n');
@@ -330,9 +480,9 @@ function run() {
   const count = Object.keys(dict).length;
   console.log(`[1] 汉化词典容量: 🟢 ${count} 条核心对照（全覆盖菜单、指令、技能与弹窗）`);
 
-  // 2. 界面即时热注入
-  const hotOk = triggerLiveHotPatch();
-  console.log(`[2] 当前界面即时热注入: ${hotOk ? '🟢 注入成功！当前屏幕已实时转换为纯中文' : '🟡 当前未检测到活跃窗口调试端口，已就绪下次启动静态加载'}`);
+  // 2. 界面即时热注入 (CDP WebSocket 原生热载入)
+  const hotOk = await triggerLiveHotPatch(dict);
+  console.log(`[2] 当前界面即时热注入: ${hotOk ? '🟢 注入成功！当前屏幕与所有弹窗已实时转换为纯中文' : '🟡 当前未检测到活跃窗口调试端口，已就绪下次启动静态加载'}`);
 
   // 3. 解包检查与构建底层注入 preload.js
   ensureAsarExtracted(officialAsar);
