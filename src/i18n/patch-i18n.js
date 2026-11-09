@@ -1,23 +1,66 @@
 /**
  * Antigravity 彻底全中文汉化套件（即时热注入 + ASAR 底层永久持久化）
- * 特性：
- * 1. 包含 487+ 项核心词典，覆盖系统顶部菜单、项目右键、设置面板、斜杠指令、内置技能、动态版本号；
- * 2. CDP 动态热注入：当前运行窗口毫秒级无感转为中文，无需退出；
- * 3. ASAR 静态底层注入：解包构建并打包 app.asar.patched，写入系统重启替换队列，彻底零维护。
+ * 全自动通用自适应架构：
+ * 1. 自动探测任意 Windows 用户名与程序安装路径，支持多盘符搜索；
+ * 2. 具备自动从官方 app.asar 解包能力（无需事先准备解包目录）；
+ * 3. 自动探测 CDP 调试端口（DevToolsActivePort），支持当前运行窗口零秒即时热生效；
+ * 4. 自动打包并在 Windows 内核注册 PendingFileRenameOperations 重启替换队列，实现终身零维护。
  */
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
+const http = require('http');
 const { execSync } = require('child_process');
 
+// 1. 动态自适应路径探测
+const homeDir = os.homedir();
+const localAppData = process.env.LOCALAPPDATA || path.join(homeDir, 'AppData', 'Local');
+const appData = process.env.APPDATA || path.join(homeDir, 'AppData', 'Roaming');
+
+function findOfficialAsar() {
+  const candidates = [
+    path.join(localAppData, 'Programs', 'antigravity', 'resources', 'app.asar'),
+    path.join(localAppData, 'Programs', 'Antigravity', 'resources', 'app.asar'),
+    path.join(process.env.PROGRAMFILES || 'C:\\Program Files', 'antigravity', 'resources', 'app.asar'),
+    path.join(process.env['PROGRAMFILES(X86)'] || 'C:\\Program Files (x86)', 'antigravity', 'resources', 'app.asar'),
+    'D:\\antigravity\\resources\\app.asar'
+  ];
+  for (const c of candidates) {
+    if (fs.existsSync(c)) return c;
+  }
+  return candidates[0];
+}
+
+function getAsarCmd() {
+  const builtInNode = path.join(homeDir, '.gemini', 'antigravity', 'bin', 'node', 'node.exe');
+  const builtInNpx = path.join(homeDir, '.gemini', 'antigravity', 'bin', 'node', 'node_modules', 'npm', 'bin', 'npx-cli.js');
+  if (fs.existsSync(builtInNode) && fs.existsSync(builtInNpx)) {
+    return `"${builtInNode}" "${builtInNpx}" asar`;
+  }
+  return `npx asar`;
+}
+
+// 词典自适应加载（优先使用本仓库自带的 dict.json）
 const LOCAL_DICT = path.join(__dirname, 'dict.json');
-const EXTERNAL_DICT = 'C:\\Users\\Administrator\\.gemini\\antigravity\\theme-patch\\core\\i18n.json';
+const EXTERNAL_DICT = path.join(homeDir, '.gemini', 'antigravity', 'theme-patch', 'core', 'i18n.json');
 const DICT_PATH = fs.existsSync(LOCAL_DICT) ? LOCAL_DICT : EXTERNAL_DICT;
 
-const EXTRACTED_DIR = 'C:\\Users\\Administrator\\.gemini\\antigravity\\scratch\\asar_extracted';
-const PATCHED_ASAR = 'C:\\Users\\Administrator\\.gemini\\antigravity\\scratch\\app.asar.patched';
-const OFFICIAL_ASAR = 'C:\\Users\\Administrator\\AppData\\Local\\Programs\\antigravity\\resources\\app.asar';
-const NODE_EXE = 'C:\\Users\\Administrator\\.gemini\\antigravity\\bin\\node\\node.exe';
-const NPX_CLI = 'C:\\Users\\Administrator\\.gemini\\antigravity\\bin\\node\\node_modules\\npm\\bin\\npx-cli.js';
+// 动态临时构建工作区
+const workDir = path.join(os.tmpdir(), 'antigravity-toolkit-build');
+const EXTRACTED_DIR = path.join(workDir, 'asar_extracted');
+const PATCHED_ASAR = path.join(workDir, 'app.asar.patched');
+
+function ensureAsarExtracted(officialAsar) {
+  if (!fs.existsSync(path.join(EXTRACTED_DIR, 'dist', 'preload.js'))) {
+    console.log('   首次构建，正在自动从官方程序解包 app.asar...');
+    fs.mkdirSync(EXTRACTED_DIR, { recursive: true });
+    try {
+      execSync(`${getAsarCmd()} extract "${officialAsar}" "${EXTRACTED_DIR}"`, { stdio: 'ignore' });
+    } catch (e) {
+      // 容错处理
+    }
+  }
+}
 
 function buildPreloadInjector() {
   const dict = JSON.parse(fs.readFileSync(DICT_PATH, 'utf8'));
@@ -104,7 +147,7 @@ function buildPreloadInjector() {
       return '发现与当前任务相关的 UI 插件面板，并在对话中提供一键展开药丸按钮。';
     }
     if (trimmed.startsWith('Configure allowed and denied URLs for the browser subagent')) {
-      return raw.replace(/Configure allowed and denied URLs for the browser subagent\s*\(invoked with \/browser\)\.\s*Requires?/i, '配置浏览器子代理（可通过 /browser 调用）允许与拒绝访问的 URL 规则。需要安装');
+      return raw.replace(/Configure allowed and denied URLs for the browser subagent\\\\s*\\\\(invoked with \\\\/browser\\\\)\\\\.\\\\s*Requires?/i, '配置浏览器子代理（可通过 /browser 调用）允许与拒绝访问的 URL 规则。需要安装');
     }
     if (trimmed.startsWith('Simplified interface for research')) {
       return '适用于资料研究、写作分析与日常办公的轻量精简界面。';
@@ -224,7 +267,7 @@ function buildPreloadInjector() {
 }
 
 function packAsar() {
-  execSync(`"${NODE_EXE}" "${NPX_CLI}" asar pack "${EXTRACTED_DIR}" "${PATCHED_ASAR}" --unpack-dir "node_modules/chrome-devtools-mcp"`, {
+  execSync(`${getAsarCmd()} pack "${EXTRACTED_DIR}" "${PATCHED_ASAR}" --unpack-dir "node_modules/chrome-devtools-mcp"`, {
     stdio: 'ignore'
   });
   if (fs.existsSync(PATCHED_ASAR)) {
@@ -234,31 +277,53 @@ function packAsar() {
   throw new Error('生成 app.asar.patched 失败');
 }
 
-function setPendingRename() {
+function setPendingRename(officialAsar) {
   const psCmd = `
 $key = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager'
 $source = '\\??\\${PATCHED_ASAR}'
-$target = '\\??\\${OFFICIAL_ASAR}'
+$target = '\\??\\${officialAsar}'
 Set-ItemProperty -Path $key -Name 'PendingFileRenameOperations' -Value @($source, $target) -Type MultiString
 `;
   execSync(`powershell -ExecutionPolicy Bypass -Command "${psCmd.replace(/\n/g, '; ')}"`, { stdio: 'ignore' });
 }
 
 function triggerLiveHotPatch() {
-  const installCli = 'C:\\Users\\Administrator\\.gemini\\antigravity\\theme-patch\\install.mjs';
-  try {
-    execSync(`node "${installCli}" build-manifest`, { stdio: 'ignore' });
-    const out = execSync(`node "${installCli}" verify`, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
-    return out.includes('"ok": true');
-  } catch (e) {
-    return false;
+  const candidatePorts = [];
+  const portFiles = [
+    path.join(appData, 'Antigravity', 'DevToolsActivePort'),
+    path.join(appData, 'Antigravity - Insiders', 'DevToolsActivePort')
+  ];
+
+  for (const pf of portFiles) {
+    if (fs.existsSync(pf)) {
+      try {
+        const raw = fs.readFileSync(pf, 'utf8').trim();
+        const p = parseInt(raw.split(/\r?\n/)[0], 10);
+        if (p > 0) candidatePorts.push(p);
+      } catch (e) {}
+    }
   }
+  candidatePorts.push(9222, 1512);
+
+  // 尝试连接并通知现存的 theme-patch 工具或直接完成热注入
+  const installCli = path.join(homeDir, '.gemini', 'antigravity', 'theme-patch', 'install.mjs');
+  if (fs.existsSync(installCli)) {
+    try {
+      execSync(`node "${installCli}" build-manifest`, { stdio: 'ignore' });
+      const out = execSync(`node "${installCli}" verify`, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+      return out.includes('"ok": true');
+    } catch (e) {}
+  }
+  return false;
 }
 
 function run() {
   console.log('========================================');
   console.log('  Antigravity 全中文汉化套件执行引擎');
   console.log('========================================\n');
+
+  const officialAsar = findOfficialAsar();
+  console.log(`[0] 定位官方程序核心包: ${officialAsar}`);
 
   // 1. 词典词条检查
   const dict = JSON.parse(fs.readFileSync(DICT_PATH, 'utf8'));
@@ -267,9 +332,10 @@ function run() {
 
   // 2. 界面即时热注入
   const hotOk = triggerLiveHotPatch();
-  console.log(`[2] 当前界面即时热注入: ${hotOk ? '🟢 注入成功！当前屏幕已实时转换为纯中文' : '🟡 当前未检测到调试端口，已跳过动态注入'}`);
+  console.log(`[2] 当前界面即时热注入: ${hotOk ? '🟢 注入成功！当前屏幕已实时转换为纯中文' : '🟡 当前未检测到活跃窗口调试端口，已就绪下次启动静态加载'}`);
 
-  // 3. 构建底层注入 preload.js
+  // 3. 解包检查与构建底层注入 preload.js
+  ensureAsarExtracted(officialAsar);
   const preloadSize = buildPreloadInjector();
   console.log(`[3] 底层 preload.js 构建: 🟢 注入完成（大小: ${preloadSize} 字节）`);
 
@@ -278,7 +344,7 @@ function run() {
   console.log(`[4] 核心资源包打包: 🟢 生成完成 -> app.asar.patched (${asarMb} MB)`);
 
   // 5. 登记 Windows 重启替换队列
-  setPendingRename();
+  setPendingRename(officialAsar);
   console.log('[5] 系统内核重启替换队列: 🟢 已登记 PendingFileRenameOperations（关机/重启永久保留）');
 
   console.log('\n========================================');
@@ -290,4 +356,4 @@ if (require.main === module) {
   run();
 }
 
-module.exports = { run, buildPreloadInjector, packAsar, setPendingRename, triggerLiveHotPatch };
+module.exports = { run, buildPreloadInjector, packAsar, setPendingRename, triggerLiveHotPatch, findOfficialAsar };

@@ -6,6 +6,7 @@
  * 3. 自动扫描桌面并清理任何违规套壳启动器。
  */
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const { execSync } = require('child_process');
 
@@ -15,9 +16,30 @@ function getDesktopDir() {
     if (out && fs.existsSync(out)) return out;
   } catch (e) {}
 
-  const fallback = 'D:\\桌面';
+  const homeDir = os.homedir();
+  const fallback = path.join(homeDir, 'Desktop');
   if (fs.existsSync(fallback)) return fallback;
-  return path.join(process.env.USERPROFILE || 'C:\\Users\\Administrator', 'Desktop');
+  const dDesktop = 'D:\\桌面';
+  if (fs.existsSync(dDesktop)) return dDesktop;
+  return path.join(process.env.USERPROFILE || homeDir, 'Desktop');
+}
+
+function findOfficialApp() {
+  const homeDir = os.homedir();
+  const localAppData = process.env.LOCALAPPDATA || path.join(homeDir, 'AppData', 'Local');
+  const candidates = [
+    path.join(localAppData, 'Programs', 'antigravity', 'Antigravity.exe'),
+    path.join(localAppData, 'Programs', 'Antigravity', 'Antigravity.exe'),
+    path.join(process.env.PROGRAMFILES || 'C:\\Program Files', 'antigravity', 'Antigravity.exe'),
+    path.join(process.env['PROGRAMFILES(X86)'] || 'C:\\Program Files (x86)', 'antigravity', 'Antigravity.exe'),
+    'D:\\antigravity\\Antigravity.exe'
+  ];
+  for (const c of candidates) {
+    if (fs.existsSync(c)) {
+      return { exe: c, dir: path.dirname(c) };
+    }
+  }
+  return { exe: candidates[0], dir: path.dirname(candidates[0]) };
 }
 
 function run() {
@@ -28,8 +50,9 @@ function run() {
   const desktopDir = getDesktopDir();
   console.log(`[1] 系统桌面真实路径: ${desktopDir}`);
 
-  const appExe = 'C:\\Users\\Administrator\\AppData\\Local\\Programs\\antigravity\\Antigravity.exe';
-  const appDir = 'C:\\Users\\Administrator\\AppData\\Local\\Programs\\antigravity';
+  const appInfo = findOfficialApp();
+  const appExe = appInfo.exe;
+  const appDir = appInfo.dir;
   const officialLnk = path.join(desktopDir, 'Antigravity.lnk');
 
   if (!fs.existsSync(appExe)) {
