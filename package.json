@@ -1,0 +1,30 @@
+{
+  "name": "antigravity-cn-toolkit",
+  "version": "1.0.0",
+  "description": "Google Antigravity 彻底全中文汉化、免 TUN 模式出海网络配置与零维护自愈工具箱",
+  "main": "src/index.js",
+  "bin": {
+    "antigravity-setup": "src/index.js"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "setup": "node src/index.js",
+    "network": "node src/network/setup-network.js",
+    "i18n": "node src/i18n/patch-i18n.js",
+    "shortcuts": "node src/system/ensure-shortcuts.js"
+  },
+  "keywords": [
+    "antigravity",
+    "google-antigravity",
+    "i18n",
+    "chinese-localization",
+    "proxy",
+    "no-tun",
+    "electron"
+  ],
+  "author": "Antigravity Power Users",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
