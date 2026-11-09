@@ -103,6 +103,15 @@ function buildPreloadInjector() {
     if (trimmed.startsWith('Discover UI plugin panels relevant to the current task')) {
       return '发现与当前任务相关的 UI 插件面板，并在对话中提供一键展开药丸按钮。';
     }
+    if (trimmed.startsWith('Configure allowed and denied URLs for the browser subagent')) {
+      return raw.replace(/Configure allowed and denied URLs for the browser subagent\s*\(invoked with \/browser\)\.\s*Requires?/i, '配置浏览器子代理（可通过 /browser 调用）允许与拒绝访问的 URL 规则。需要安装');
+    }
+    if (trimmed.startsWith('Simplified interface for research')) {
+      return '适用于资料研究、写作分析与日常办公的轻量精简界面。';
+    }
+    if (trimmed.startsWith('Full interface for coding')) {
+      return '配备代码开发、全套调试工具与智能体编排的专业全能界面。';
+    }
 
     if (RE_WORKED_FOR.test(trimmed)) return raw.replace(RE_WORKED_FOR, '已工作 $1');
     if (RE_THOUGHT_FOR.test(trimmed)) return raw.replace(RE_THOUGHT_FOR, '已思考 $1');
