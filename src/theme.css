@@ -1,0 +1,146 @@
+/* Antigravity 原厂微胶囊排版与字体对齐样式表 */
+
+#ag-live-metrics-pill {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  margin: 0 8px;
+  padding: 0 10px;
+  border-radius: 9999px;
+  background-color: rgba(125, 125, 125, 0.08);
+  border: 1px solid rgba(125, 125, 125, 0.16);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif !important;
+  font-variant-numeric: tabular-nums;
+  font-size: 11.5px !important;
+  font-weight: 500 !important;
+  line-height: 1 !important;
+  color: #555555;
+  white-space: nowrap;
+  user-select: none;
+  cursor: default;
+  transition: all 0.15s ease-in-out;
+  vertical-align: middle;
+}
+
+/* 深色模式自动反色适配 */
+:root[class*="dark"] #ag-live-metrics-pill,
+body[class*="dark"] #ag-live-metrics-pill,
+[data-theme="dark"] #ag-live-metrics-pill {
+  background-color: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.14);
+  color: #a1a1aa;
+}
+
+#ag-live-metrics-pill:hover {
+  background-color: rgba(125, 125, 125, 0.14);
+  color: #18181b;
+}
+
+:root[class*="dark"] #ag-live-metrics-pill:hover,
+body[class*="dark"] #ag-live-metrics-pill:hover,
+[data-theme="dark"] #ag-live-metrics-pill:hover {
+  background-color: rgba(255, 255, 255, 0.14);
+  color: #f4f4f5;
+}
+
+#ag-live-metrics-pill #ag-live-metrics-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: inherit !important;
+  font-size: inherit !important;
+  color: inherit !important;
+}
+
+#ag-live-metrics-pill .ag-sep {
+  opacity: 0.35;
+  font-size: 9px;
+  margin: 0 1px;
+}
+
+#ag-live-metrics-pill .ag-ctx-warn {
+  color: #d97706;
+  font-weight: 600;
+}
+
+#ag-live-metrics-pill .ag-ctx-crit {
+  color: #dc2626;
+  font-weight: 700;
+}
+
+/* 悬停详情卡片排版 */
+#ag-live-metrics-tooltip {
+  position: fixed;
+  z-index: 2147483647;
+  min-width: 320px;
+  max-width: 440px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background-color: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif !important;
+  font-variant-numeric: tabular-nums;
+  font-size: 11.5px !important;
+  line-height: 1.6 !important;
+  color: #27272a;
+  text-align: left;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(4px);
+  transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s;
+}
+
+:root[class*="dark"] #ag-live-metrics-tooltip,
+body[class*="dark"] #ag-live-metrics-tooltip,
+[data-theme="dark"] #ag-live-metrics-tooltip {
+  background-color: #18181b;
+  border-color: rgba(255, 255, 255, 0.15);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+  color: #e4e4e7;
+}
+
+#ag-live-metrics-tooltip[data-visible="1"] {
+  opacity: 1 !important;
+  visibility: visible !important;
+  transform: translateY(0);
+}
+
+#ag-live-metrics-tooltip .ag-tt-hdr {
+  font-weight: 600;
+  font-size: 11.5px;
+  color: #09090b;
+  border-bottom: 1px solid rgba(125, 125, 125, 0.18);
+  padding-bottom: 4px;
+  margin-bottom: 6px;
+}
+
+:root[class*="dark"] #ag-live-metrics-tooltip .ag-tt-hdr,
+body[class*="dark"] #ag-live-metrics-tooltip .ag-tt-hdr,
+[data-theme="dark"] #ag-live-metrics-tooltip .ag-tt-hdr {
+  color: #fafafa;
+}
+
+#ag-live-metrics-tooltip .ag-tt-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5px 0;
+}
+
+#ag-live-metrics-tooltip .ag-tt-lbl {
+  color: #71717a;
+}
+
+#ag-live-metrics-tooltip .ag-tt-val {
+  font-weight: 500;
+  color: #18181b;
+}
+
+:root[class*="dark"] #ag-live-metrics-tooltip .ag-tt-val,
+body[class*="dark"] #ag-live-metrics-tooltip .ag-tt-val,
+[data-theme="dark"] #ag-live-metrics-tooltip .ag-tt-val {
+  color: #f4f4f5;
+}
