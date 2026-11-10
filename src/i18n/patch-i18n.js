@@ -91,6 +91,36 @@ function generateInjectorScript(dict) {
 
   const PATCH_VERSION = '${patchVersion}';
   const DICT = ${JSON.stringify(dict)};
+
+  // === 原生系统右键上下文菜单拦截与递归汉化 ===
+  if (window.electronNative && typeof window.electronNative.showContextMenu === 'function') {
+    if (!window.electronNative.__ag_orig_showContextMenu) {
+      window.electronNative.__ag_orig_showContextMenu = window.electronNative.showContextMenu.bind(window.electronNative);
+    }
+    function translateNativeMenuItems(items) {
+      if (!Array.isArray(items)) return items;
+      return items.map(item => {
+        if (!item || typeof item !== 'object') return item;
+        const copy = Object.assign({}, item);
+        if (typeof copy.label === 'string') {
+          const trimmed = copy.label.trim();
+          if (typeof DICT[trimmed] === 'string') {
+            copy.label = DICT[trimmed];
+          }
+        }
+        if (Array.isArray(copy.submenu)) {
+          copy.submenu = translateNativeMenuItems(copy.submenu);
+        }
+        if (Array.isArray(copy.items)) {
+          copy.items = translateNativeMenuItems(copy.items);
+        }
+        return copy;
+      });
+    }
+    window.electronNative.showContextMenu = function(items) {
+      return window.electronNative.__ag_orig_showContextMenu(translateNativeMenuItems(items));
+    };
+  }
   const ATTR_MAP = {
     'Display Options': '显示选项',
     'Create New Project': '新建项目',
@@ -560,6 +590,53 @@ function buildPreloadInjector(paths) {
   const injectorCode = generateInjectorScript(dict);
   const newPreload = cleanPreload + '\n' + injectorCode;
   fs.writeFileSync(preloadPath, newPreload, 'utf8');
+
+  // 原生系统右键上下文菜单底层注入 (ipcHandlers.js -> buildContextMenuTemplate)
+  const ipcPath = path.join(paths.extractedDir, 'dist', 'ipcHandlers.js');
+  const ipcOrigPath = path.join(paths.extractedDir, 'dist', 'ipcHandlers.js.orig');
+  if (fs.existsSync(ipcPath)) {
+    if (!fs.existsSync(ipcOrigPath)) {
+      fs.copyFileSync(ipcPath, ipcOrigPath);
+    }
+    const origIpc = fs.readFileSync(ipcOrigPath, 'utf8');
+    const targetSig = 'function buildContextMenuTemplate(items, onSelect) {';
+    if (origIpc.includes(targetSig)) {
+      const injection = `
+const __AG_MENU_DICT = ${JSON.stringify(dict)};
+function __agTranslateMenuLabel(lbl) {
+  if (typeof lbl !== 'string') return lbl ?? '';
+  const trimmed = lbl.trim();
+  return __AG_MENU_DICT[trimmed] || lbl;
+}
+function buildContextMenuTemplate(items, onSelect) {
+  return items.map((item) => {
+    if (item.type === 'separator') return { type: 'separator' };
+    if (item.type === 'submenu' || (item.submenu && item.submenu.length > 0)) {
+      return {
+        id: item.id,
+        label: __agTranslateMenuLabel(item.label),
+        type: 'submenu',
+        enabled: !item.disabled,
+        submenu: buildContextMenuTemplate(item.submenu ?? [], onSelect),
+      };
+    }
+    return {
+      id: item.id,
+      label: __agTranslateMenuLabel(item.label),
+      type: item.type ?? 'normal',
+      checked: item.checked,
+      enabled: !item.disabled,
+      accelerator: item.accelerator,
+      click: () => { onSelect(item.id); },
+    };
+  });
+}
+function __orig_buildContextMenuTemplate(`;
+      const patchedIpc = origIpc.replace(targetSig, injection);
+      fs.writeFileSync(ipcPath, patchedIpc, 'utf8');
+    }
+  }
+
   return { size: newPreload.length, dictCount: Object.keys(dict).length, injectorCode };
 }
 
