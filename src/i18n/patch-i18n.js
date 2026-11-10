@@ -13,6 +13,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const http = require('http');
+const crypto = require('crypto');
 const { execSync } = require('child_process');
 const { findOfficialApp } = require('../system/ensure-shortcuts');
 
@@ -81,12 +82,14 @@ function getMergedDict() {
  * 生成纯净原生注入脚本（红线 1：100% 官方外观，红线 2：完整词典与全属性穿透）
  */
 function generateInjectorScript(dict) {
+  const dictHash = crypto.createHash('md5').update(JSON.stringify(dict)).digest('hex').slice(0, 8);
+  const patchVersion = `v1.3.1-${dictHash}`;
   return `
 // === Antigravity Unified Clean Engine (Native Pure Edition) ===
 (function() {
   if (window.top !== window) return;
 
-  const PATCH_VERSION = '20261110-v1.3.1-native';
+  const PATCH_VERSION = '${patchVersion}';
   const DICT = ${JSON.stringify(dict)};
   const ATTR_MAP = {
     'Display Options': '显示选项',
