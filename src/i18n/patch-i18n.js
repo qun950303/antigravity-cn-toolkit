@@ -1,50 +1,98 @@
 /**
  * Antigravity CN Toolkit - 纯净完全体汉化引擎 (ASAR底层持久化 + CDP即时热注入)
- * 融合原版 1000 行成熟引擎核心精髓：
+ * 融合原版 1000 行成熟引擎核心精华：
  * 1. 深度属性穿透：WeakMap 追踪、data-ag-orig- 属性双向解耦，覆盖 title/placeholder/aria-label；
  * 2. 脏根节流防抖：O(N·深度) 脏根合并队列与 requestAnimationFrame 驱动，极端丝滑零卡顿；
  * 3. 死锁自愈能力：自动监测并释放设置面板可能触发的焦点死锁；
  * 4. 严守红线 1（外观 100% 原生）：彻底剔除所有暖纸底色、蜡封框与外部 CSS，完美保持官方纯净原生质感；
- * 5. 严守红线 2（词典 100% 完整）：采用工程自带 514+ 项全量最新基准词典，全覆盖菜单、设置、指令与权限。
+ * 5. 严守红线 2（词典 100% 完整）：采用工程自带 514+ 项全量最新基准词典，全覆盖菜单、设置、指令与权限；
+ * 6. 自适应环境适配：杜绝所有硬编码路径，全动态探测安装目录、解包工作区与 CDP 调试端口；
+ * 7. 安全双重备份：覆盖前自动备份原厂 app.asar.backup，文件占用时安全降级至系统内核重启队列。
  */
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const http = require('http');
 const { execSync } = require('child_process');
+const { findOfficialApp } = require('../system/ensure-shortcuts');
 
 const PROJECT_ROOT = path.resolve(__dirname, '..', '..');
 const LOCAL_DICT_PATH = path.join(__dirname, 'dict.json');
-const EXTRACTED_DIR = 'C:\\Users\\Administrator\\.gemini\\antigravity\\scratch\\asar_extracted';
-const PATCHED_ASAR = 'C:\\Users\\Administrator\\.gemini\\antigravity\\scratch\\app.asar.patched';
-const OFFICIAL_ASAR = 'C:\\Users\\Administrator\\AppData\\Local\\Programs\\antigravity\\resources\\app.asar';
-const NODE_EXE = 'C:\\Users\\Administrator\\.gemini\\antigravity\\bin\\node\\node.exe';
-const NPX_CLI = 'C:\\Users\\Administrator\\.gemini\\antigravity\\bin\\node\\node_modules\\npm\\bin\\npx-cli.js';
 
+/**
+ * 动态自适应探测路径集合，杜绝一切硬编码
+ */
+function getWorkPaths() {
+  const appInfo = findOfficialApp();
+  const officialAsar = appInfo ? path.join(appInfo.dir, 'resources', 'app.asar') : null;
+  const localAppData = process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local');
+  const fallbackOfficialAsar = path.join(localAppData, 'Programs', 'antigravity', 'resources', 'app.asar');
+  const realOfficialAsar = (officialAsar && fs.existsSync(officialAsar)) 
+    ? officialAsar 
+    : (fs.existsSync(fallbackOfficialAsar) ? fallbackOfficialAsar : null);
+
+  const appData = process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming');
+  const workBaseDir = path.join(localAppData, 'antigravity-toolkit');
+  const extractedDir = path.join(workBaseDir, 'asar_extracted');
+
+  const resourcesDir = realOfficialAsar ? path.dirname(realOfficialAsar) : workBaseDir;
+  const patchedAsar = path.join(resourcesDir, 'app.asar.patched');
+  const backupAsar = path.join(resourcesDir, 'app.asar.backup');
+
+  return {
+    officialAsar: realOfficialAsar,
+    resourcesDir,
+    backupAsar,
+    patchedAsar,
+    workBaseDir,
+    extractedDir,
+    appData
+  };
+}
+
+/**
+ * 读取并安全合并词典，带严格异常捕获
+ */
 function getMergedDict() {
   let dict = {};
   if (fs.existsSync(LOCAL_DICT_PATH)) {
-    dict = JSON.parse(fs.readFileSync(LOCAL_DICT_PATH, 'utf8'));
-  }
-  // 安全合并不存在于主词典的外部覆盖
-  const extOverride = 'C:\\Users\\Administrator\\.gemini\\antigravity\\theme-patch\\user\\i18n.override.json';
-  if (fs.existsSync(extOverride)) {
     try {
-      const user = JSON.parse(fs.readFileSync(extOverride, 'utf8'));
-      for (const k of Object.keys(user)) {
-        if (k !== '_comment') dict[k] = user[k];
-      }
-    } catch (e) {}
+      dict = JSON.parse(fs.readFileSync(LOCAL_DICT_PATH, 'utf8'));
+    } catch (err) {
+      console.warn('⚠️ 读取本地主词典异常，将以空基准启动:', err.message);
+      dict = {};
+    }
+  }
+
+  // 安全合并用户自定义覆盖词典 (如有)
+  const homeDir = os.homedir();
+  const userOverrideCandidates = [
+    path.join(homeDir, '.gemini', 'antigravity', 'theme-patch', 'user', 'i18n.override.json'),
+    path.join(PROJECT_ROOT, 'i18n.override.json')
+  ];
+  for (const extOverride of userOverrideCandidates) {
+    if (fs.existsSync(extOverride)) {
+      try {
+        const user = JSON.parse(fs.readFileSync(extOverride, 'utf8'));
+        for (const k of Object.keys(user)) {
+          if (k !== '_comment') dict[k] = user[k];
+        }
+      } catch (e) {}
+    }
   }
   return dict;
 }
 
+/**
+ * 生成纯净原生注入脚本（红线 1：100% 官方外观，红线 2：完整词典与全属性穿透）
+ */
 function generateInjectorScript(dict) {
   return `
 // === Antigravity Unified Clean Engine (Native Pure Edition) ===
 (function() {
   if (window.top !== window) return;
 
-  const PATCH_VERSION = '20261110-v1.1.0-native';
+  const PATCH_VERSION = '20261110-v1.2.0-native';
   const DICT = ${JSON.stringify(dict)};
   const ATTR_MAP = {
     'Display Options': '显示选项',
@@ -152,7 +200,7 @@ function generateInjectorScript(dict) {
     if (RE_SHOW_BREAKDOWNS.test(trimmed)) return raw.replace(RE_SHOW_BREAKDOWNS, '展开明细 ($1 项)');
     if (RE_PERM_DELETE.test(trimmed)) return raw.replace(RE_PERM_DELETE, '永久删除 $1 及 $2 个进行中的会话。');
 
-    // 模糊长句前缀
+    // 模糊长句前缀映射
     if (trimmed.startsWith('Comprehensive guide and reference for the Antigravity')) {
       return 'Antigravity 自定义系统的完整指南与参考。用于说明自定义项的工作原理...';
     }
@@ -213,7 +261,7 @@ function generateInjectorScript(dict) {
     if (mNotUsed) {
       const typeMap = { weekly: '每周', '5-hour': '5 小时', 'five-hour': '5 小时', daily: '每日' };
       const type = typeMap[mNotUsed[1].toLowerCase()] || mNotUsed[1];
-      return '您尚未消耗任何' + type + '额度。';
+      return '您尚未消耗任何 ' + type + '额度。';
     }
 
     return null;
@@ -451,12 +499,51 @@ function generateInjectorScript(dict) {
 `;
 }
 
-function buildPreloadInjector() {
-  const dict = getMergedDict();
-  const preloadPath = path.join(EXTRACTED_DIR, 'dist', 'preload.js');
-  if (!fs.existsSync(preloadPath)) {
-    throw new Error('未找到待注入的 preload.js: ' + preloadPath);
+/**
+ * 确保解包目录就绪，若缺失则全自动自适应解包
+ */
+function ensureExtracted(paths) {
+  if (!paths.officialAsar || !fs.existsSync(paths.officialAsar)) {
+    throw new Error('未检测到 Antigravity 官方底层 app.asar，请确认程序已安装。');
   }
+
+  const preloadPath = path.join(paths.extractedDir, 'dist', 'preload.js');
+  if (!fs.existsSync(preloadPath)) {
+    console.log('[*] 正在执行首次核心底包自适应解包...');
+    fs.mkdirSync(paths.extractedDir, { recursive: true });
+
+    let asarModule = null;
+    try {
+      asarModule = require('asar');
+    } catch (e) {
+      try {
+        asarModule = require(path.join(PROJECT_ROOT, 'node_modules', 'asar'));
+      } catch (e2) {}
+    }
+
+    if (asarModule && typeof asarModule.extractAll === 'function') {
+      asarModule.extractAll(paths.officialAsar, paths.extractedDir);
+    } else {
+      execSync(`npx asar extract "${paths.officialAsar}" "${paths.extractedDir}"`, {
+        cwd: PROJECT_ROOT,
+        stdio: 'inherit'
+      });
+    }
+
+    if (!fs.existsSync(preloadPath)) {
+      throw new Error('解包执行完毕但未定位到 preload.js: ' + preloadPath);
+    }
+    console.log('    🟢 官方核心底包解包成功');
+  }
+  return preloadPath;
+}
+
+/**
+ * 构建注入后的 preload.js
+ */
+function buildPreloadInjector(paths) {
+  const dict = getMergedDict();
+  const preloadPath = ensureExtracted(paths);
 
   const origPreload = fs.readFileSync(preloadPath, 'utf8');
   let cleanPreload = origPreload;
@@ -473,64 +560,212 @@ function buildPreloadInjector() {
   return { size: newPreload.length, dictCount: Object.keys(dict).length, injectorCode };
 }
 
-function packAsar() {
-  execSync('"' + NODE_EXE + '" "' + NPX_CLI + '" asar pack "' + EXTRACTED_DIR + '" "' + PATCHED_ASAR + '" --unpack-dir "node_modules/chrome-devtools-mcp"', {
-    stdio: 'ignore'
-  });
-  if (fs.existsSync(PATCHED_ASAR)) {
-    const sizeMb = (fs.statSync(PATCHED_ASAR).size / (1024 * 1024)).toFixed(2);
+/**
+ * 将解包修改后的目录打包为 app.asar.patched
+ */
+async function packAsar(paths) {
+  fs.mkdirSync(path.dirname(paths.patchedAsar), { recursive: true });
+
+  // 写入前自动建立原厂官方底包备份
+  if (paths.officialAsar && fs.existsSync(paths.officialAsar) && !fs.existsSync(paths.backupAsar)) {
+    try {
+      fs.copyFileSync(paths.officialAsar, paths.backupAsar);
+      console.log('    🟢 自动建立原厂底包备份: ' + path.basename(paths.backupAsar));
+    } catch (e) {
+      console.warn('    ⚠️ 原厂底包备份创建跳过: ' + e.message);
+    }
+  }
+
+  let asarModule = null;
+  try {
+    asarModule = require('asar');
+  } catch (e) {
+    try {
+      asarModule = require(path.join(PROJECT_ROOT, 'node_modules', 'asar'));
+    } catch (e2) {}
+  }
+
+  if (asarModule && typeof asarModule.createPackageWithOptions === 'function') {
+    await asarModule.createPackageWithOptions(paths.extractedDir, paths.patchedAsar, {
+      unpackDir: 'node_modules/chrome-devtools-mcp'
+    });
+  } else {
+    execSync(`npx asar pack "${paths.extractedDir}" "${paths.patchedAsar}" --unpack-dir "node_modules/chrome-devtools-mcp"`, {
+      cwd: PROJECT_ROOT,
+      stdio: 'ignore'
+    });
+  }
+
+  if (fs.existsSync(paths.patchedAsar)) {
+    const sizeMb = (fs.statSync(paths.patchedAsar).size / (1024 * 1024)).toFixed(2);
     return sizeMb;
   }
   throw new Error('生成 app.asar.patched 失败');
 }
 
-function deployAsarDirectly() {
-  if (fs.existsSync(PATCHED_ASAR)) {
-    fs.copyFileSync(PATCHED_ASAR, OFFICIAL_ASAR);
-    return true;
+/**
+ * 物理部署核心包，若被锁定则安全捕获
+ */
+function deployAsarDirectly(paths) {
+  if (!fs.existsSync(paths.patchedAsar) || !paths.officialAsar) {
+    return { ok: false, locked: false, message: '目标或源文件不存在' };
   }
-  return false;
-}
-
-function setPendingRename() {
   try {
-    const psCmd = `Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager' -Name 'PendingFileRenameOperations' -Value @('\\??\\${PATCHED_ASAR}', '\\??\\${OFFICIAL_ASAR}') -Type MultiString`;
-    execSync(`powershell -ExecutionPolicy Bypass -Command "${psCmd}"`, { stdio: 'ignore' });
-  } catch (e) {}
-}
-
-async function triggerLiveHotPatch(injectorCode) {
-  try {
-    const port = 3608;
-    const list = await new Promise((resolve) => {
-      const req = http.get('http://127.0.0.1:' + port + '/json/list', (res) => {
-        let d = '';
-        res.on('data', c => d += c);
-        res.on('end', () => {
-          try { resolve(JSON.parse(d)); } catch(e) { resolve([]); }
-        });
-      });
-      req.on('error', () => resolve([]));
-    });
-
-    const pages = list.filter(t => t.url && t.url.includes('127.0.0.1') && t.webSocketDebuggerUrl);
-    if (pages.length === 0) return false;
-
-    for (const p of pages) {
-      const ws = new WebSocket(p.webSocketDebuggerUrl);
-      await new Promise((resolve) => ws.addEventListener('open', resolve));
-      ws.send(JSON.stringify({
-        id: Date.now(),
-        method: 'Runtime.evaluate',
-        params: { expression: injectorCode, returnByValue: true }
-      }));
-      await new Promise(r => setTimeout(r, 100));
-      ws.close();
+    fs.copyFileSync(paths.patchedAsar, paths.officialAsar);
+    return { ok: true, locked: false, message: '成功物理覆盖官方原厂底包' };
+  } catch (err) {
+    if (err.code === 'EBUSY') {
+      return { ok: false, locked: true, message: '客户端正在运行（文件被锁定，已安全保留至 patched 包）' };
     }
-    return true;
-  } catch (e) {
-    return false;
+    return { ok: false, locked: false, message: err.message };
   }
+}
+
+/**
+ * 安全追加登记 Windows 系统内核重启替换队列 (PendingFileRenameOperations)
+ * 绝不整值覆盖，保护其他安装程序登记项；真实捕获权限异常，绝不虚报
+ */
+function setPendingRename(paths) {
+  if (!paths.officialAsar || !fs.existsSync(paths.patchedAsar)) {
+    return { ok: false, message: '文件路径不完整' };
+  }
+
+  const psScript = `
+    $path = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager'
+    $name = 'PendingFileRenameOperations'
+    $existing = (Get-ItemProperty -Path $path -Name $name -ErrorAction SilentlyContinue).$name
+    if (-not $existing) { $existing = @() }
+
+    $src = '\\??\\${paths.patchedAsar}'
+    $dst = '\\??\\${paths.officialAsar}'
+
+    $clean = [System.Collections.Generic.List[string]]::new()
+    for ($i = 0; $i -lt $existing.Length; $i += 2) {
+      if ($i + 1 -lt $existing.Length) {
+        $itemSrc = $existing[$i]
+        $itemDst = $existing[$i + 1]
+        if ($itemDst -ne $dst -and $itemSrc -ne $src) {
+          $clean.Add($itemSrc)
+          $clean.Add($itemDst)
+        }
+      }
+    }
+    $clean.Add($src)
+    $clean.Add($dst)
+
+    Set-ItemProperty -Path $path -Name $name -Value $clean.ToArray() -Type MultiString -ErrorAction Stop
+  `;
+
+  try {
+    const encoded = Buffer.from(psScript, 'utf16le').toString('base64');
+    execSync(`powershell -ExecutionPolicy Bypass -EncodedCommand ${encoded}`, { stdio: 'pipe' });
+    return { ok: true, message: '已安全追加登记至系统内核重启队列' };
+  } catch (err) {
+    return { ok: false, message: '未获取管理员权限（冷启动或关闭客户端后直接替换即可）' };
+  }
+}
+
+/**
+ * 动态探测活动 CDP 调试端口
+ */
+function detectCdpPort(paths) {
+  const activePortFile = path.join(paths.appData, 'Antigravity', 'DevToolsActivePort');
+  if (fs.existsSync(activePortFile)) {
+    try {
+      const content = fs.readFileSync(activePortFile, 'utf8').trim();
+      const lines = content.split(/\r?\n/);
+      if (lines.length > 0) {
+        const port = parseInt(lines[0].trim(), 10);
+        if (!isNaN(port) && port > 0 && port < 65536) {
+          return port;
+        }
+      }
+    } catch (e) {}
+  }
+  return null;
+}
+
+/**
+ * 实时热注入（带超时控制、兼容性检测与真实状态汇报）
+ */
+async function triggerLiveHotPatch(paths, injectorCode) {
+  const WS = typeof WebSocket !== 'undefined' ? WebSocket : null;
+  if (!WS) {
+    return { ok: false, count: 0, message: '当前 Node 缺少原生 WebSocket 支持，热注入跳过' };
+  }
+
+  const detectedPort = detectCdpPort(paths);
+  const candidatePorts = [detectedPort, 3608, 9222].filter(Boolean);
+
+  let activePort = null;
+  let targetPages = [];
+
+  for (const port of candidatePorts) {
+    try {
+      const list = await new Promise((resolve) => {
+        const req = http.get(`http://127.0.0.1:${port}/json/list`, { timeout: 1500 }, (res) => {
+          let d = '';
+          res.on('data', c => d += c);
+          res.on('end', () => {
+            try { resolve(JSON.parse(d)); } catch(e) { resolve([]); }
+          });
+        });
+        req.on('error', () => resolve([]));
+        req.on('timeout', () => { req.destroy(); resolve([]); });
+      });
+
+      const pages = list.filter(t => t.url && t.url.includes('127.0.0.1') && t.webSocketDebuggerUrl);
+      if (pages.length > 0) {
+        activePort = port;
+        targetPages = pages;
+        break;
+      }
+    } catch (e) {}
+  }
+
+  if (targetPages.length === 0) {
+    return { ok: false, count: 0, message: '未发现正在运行的活动窗口（将在下次启动时生效）' };
+  }
+
+  let injectedCount = 0;
+  for (const p of targetPages) {
+    try {
+      const success = await new Promise((resolve) => {
+        const ws = new WS(p.webSocketDebuggerUrl);
+        const timer = setTimeout(() => {
+          try { ws.close(); } catch (e) {}
+          resolve(false);
+        }, 2500);
+
+        ws.onopen = () => {
+          ws.send(JSON.stringify({
+            id: Date.now(),
+            method: 'Runtime.evaluate',
+            params: { expression: injectorCode, returnByValue: true }
+          }));
+          setTimeout(() => {
+            clearTimeout(timer);
+            try { ws.close(); } catch (e) {}
+            resolve(true);
+          }, 150);
+        };
+
+        ws.onerror = () => {
+          clearTimeout(timer);
+          try { ws.close(); } catch (e) {}
+          resolve(false);
+        };
+      });
+
+      if (success) injectedCount++;
+    } catch (e) {}
+  }
+
+  return {
+    ok: injectedCount > 0,
+    count: injectedCount,
+    message: injectedCount > 0 ? `已为 ${injectedCount} 个活动界面实时应用中文` : '活动窗口通信未响应'
+  };
 }
 
 async function run() {
@@ -538,38 +773,67 @@ async function run() {
   console.log('  Antigravity CN Toolkit - 完全体汉化引擎');
   console.log('========================================\n');
 
+  const paths = getWorkPaths();
+  if (!paths.officialAsar) {
+    throw new Error('未在系统中探测到 Antigravity 安装路径。');
+  }
+  console.log(`[0] 自适应探测核心路径: ${paths.officialAsar}`);
+
   // 1. 词典词条检查
   const dict = getMergedDict();
   const count = Object.keys(dict).length;
-  console.log('[1] 核心词典容量: 🟢 ' + count + ' 条标准对照（精确达标 514+ 条）');
+  console.log(`[1] 核心词典容量: 🟢 ${count} 条标准对照（基准 514+ 项全量覆盖）`);
 
   // 2. 构建完全体 preload.js
-  const { size, injectorCode } = buildPreloadInjector();
-  console.log('[2] 底层 preload.js 完全体引擎构建: 🟢 完成（大小: ' + size + ' 字节，原生外观 0 泛黄）');
+  const { size, injectorCode } = buildPreloadInjector(paths);
+  console.log(`[2] 底层 preload.js 完全体引擎构建: 🟢 完成（大小: ${size} 字节，原生质感 0 泛黄）`);
 
   // 3. 核心资源包打包
-  const asarMb = packAsar();
-  console.log('[3] 核心资源包打包: 🟢 生成完成 -> app.asar.patched (' + asarMb + ' MB)');
+  const asarMb = await packAsar(paths);
+  console.log(`[3] 核心资源包打包: 🟢 生成完成 -> app.asar.patched (${asarMb} MB)`);
 
   // 4. 物理直接部署至官方路径
-  const deployed = deployAsarDirectly();
-  console.log('[4] 官方核心底包物理覆盖: 🟢 ' + (deployed ? '成功物理落盘' : '写入失败'));
+  const deployResult = deployAsarDirectly(paths);
+  if (deployResult.ok) {
+    console.log(`[4] 官方核心底包物理覆盖: 🟢 ${deployResult.message}`);
+  } else {
+    console.log(`[4] 官方核心底包状态: 🟡 ${deployResult.message}`);
+  }
 
   // 5. 登记 Windows 内核重启替换队列
-  setPendingRename();
-  console.log('[5] 系统内核重启替换队列: 🟢 已登记 PendingFileRenameOperations（系统重启双重兜底）');
+  const regResult = setPendingRename(paths);
+  if (regResult.ok) {
+    console.log(`[5] 系统内核重启替换队列: 🟢 ${regResult.message}`);
+  } else {
+    console.log(`[5] 系统内核重启替换队列: ⚪ ${regResult.message}`);
+  }
 
   // 6. 当前屏幕实时热生效（无需手动刷新）
-  const liveOk = await triggerLiveHotPatch(injectorCode);
-  console.log('[6] 当前屏幕实时热生效: ' + (liveOk ? '🟢 注入成功！界面悬浮提示已实时转为中文' : '🟡 当前窗口已就绪'));
+  const liveResult = await triggerLiveHotPatch(paths, injectorCode);
+  if (liveResult.ok) {
+    console.log(`[6] 当前屏幕实时热生效: 🟢 ${liveResult.message}`);
+  } else {
+    console.log(`[6] 当前屏幕实时热生效: ⚪ ${liveResult.message}`);
+  }
 
   console.log('\n========================================');
   console.log('  完全体汉化引擎部署完毕（彻底零维护）');
   console.log('========================================');
+  return { ok: true, dictCount: count, deployed: deployResult.ok, live: liveResult.ok };
 }
 
 if (require.main === module) {
   run().catch(console.error);
 }
 
-module.exports = { run, getMergedDict, buildPreloadInjector, packAsar, deployAsarDirectly, triggerLiveHotPatch };
+module.exports = {
+  run,
+  getWorkPaths,
+  getMergedDict,
+  buildPreloadInjector,
+  packAsar,
+  deployAsarDirectly,
+  setPendingRename,
+  detectCdpPort,
+  triggerLiveHotPatch
+};

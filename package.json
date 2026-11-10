@@ -26,5 +26,8 @@
   "license": "MIT",
   "engines": {
     "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "asar": "^3.2.0"
   }
 }

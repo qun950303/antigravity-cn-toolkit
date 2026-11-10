@@ -1,9 +1,9 @@
 /**
  * Antigravity 官方原厂直连快捷方式治理脚本
  * 铁律保障：
- * 1. 严禁使用任何批处理 BAT 脚本或套壳启动器；
- * 2. 快捷方式必须且只能保持 100% 官方原厂可执行程序直连；
- * 3. 自动扫描桌面并清理任何违规套壳启动器。
+ * 1. 快捷方式必须且只能保持 100% 官方原厂可执行程序直连；
+ * 2. 严禁任何脚本套壳；
+ * 3. 尊重用户个人数据，绝不静默删除用户的自定义批处理脚本。
  */
 const fs = require('fs');
 const os = require('os');
@@ -12,15 +12,15 @@ const { execSync } = require('child_process');
 
 function getDesktopDir() {
   try {
-    const out = execSync('powershell -Command "[Environment]::GetFolderPath(\'Desktop\')"', { encoding: 'utf8' }).trim();
+    const out = execSync('powershell -Command "[Environment]::GetFolderPath(\'Desktop\')"', { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
     if (out && fs.existsSync(out)) return out;
   } catch (e) {}
 
   const homeDir = os.homedir();
-  const fallback = path.join(homeDir, 'Desktop');
-  if (fs.existsSync(fallback)) return fallback;
   const dDesktop = 'D:\\桌面';
   if (fs.existsSync(dDesktop)) return dDesktop;
+  const fallback = path.join(homeDir, 'Desktop');
+  if (fs.existsSync(fallback)) return fallback;
   return path.join(process.env.USERPROFILE || homeDir, 'Desktop');
 }
 
@@ -39,7 +39,7 @@ function findOfficialApp() {
       return { exe: c, dir: path.dirname(c) };
     }
   }
-  return { exe: candidates[0], dir: path.dirname(candidates[0]) };
+  return null;
 }
 
 function run() {
@@ -51,57 +51,62 @@ function run() {
   console.log(`[1] 系统桌面真实路径: ${desktopDir}`);
 
   const appInfo = findOfficialApp();
+  if (!appInfo) {
+    console.error('🔴 未在常见路径检测到官方 Antigravity 程序，已跳过生成快捷方式。');
+    return { ok: false, error: '程序未安装' };
+  }
+
   const appExe = appInfo.exe;
   const appDir = appInfo.dir;
   const officialLnk = path.join(desktopDir, 'Antigravity.lnk');
 
-  if (!fs.existsSync(appExe)) {
-    console.error(`🔴 未检测到官方程序路径: ${appExe}`);
-    return;
-  }
-
-  // 1. 生成并固化 100% 官方原厂快捷方式
-  const psScript = `
+  // 1. 生成并固化 100% 官方原厂快捷方式（使用安全的 JSON 转义传递参数）
+  const tempPs = path.join(os.tmpdir(), `make_clean_lnk_${Date.now()}.ps1`);
+  try {
+    const psScript = `
 $sh = New-Object -ComObject WScript.Shell
-$sc = $sh.CreateShortcut('${officialLnk}')
-$sc.TargetPath = '${appExe}'
+$sc = $sh.CreateShortcut([System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('${Buffer.from(officialLnk, 'utf8').toString('base64')}')))
+$sc.TargetPath = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('${Buffer.from(appExe, 'utf8').toString('base64')}'))
 $sc.Arguments = ''
-$sc.WorkingDirectory = '${appDir}'
-$sc.IconLocation = '${appExe},0'
-$sc.Description = 'Antigravity'
+$sc.WorkingDirectory = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('${Buffer.from(appDir, 'utf8').toString('base64')}'))
+$sc.IconLocation = "$($sc.TargetPath),0"
+$sc.Description = 'Antigravity (官方原厂直连)'
 $sc.Save()
 `;
-  const tempPs = path.join(process.env.TEMP || 'C:\\Windows\\Temp', 'make_clean_lnk.ps1');
-  fs.writeFileSync(tempPs, psScript, 'utf8');
-  execSync(`powershell -ExecutionPolicy Bypass -File "${tempPs}"`, { stdio: 'ignore' });
-  try { fs.unlinkSync(tempPs); } catch (e) {}
+    fs.writeFileSync(tempPs, psScript, 'utf8');
+    execSync(`powershell -ExecutionPolicy Bypass -File "${tempPs}"`, { stdio: 'ignore' });
+    console.log(`[2] 官方原厂快捷方式: 🟢 已就绪 -> ${officialLnk}`);
+    console.log(`    - 目标程序: ${appExe}`);
+    console.log('    - 启动参数: (无参数，原版直连)');
+    console.log('    - 工作目录: ' + appDir);
+  } catch (e) {
+    console.error('🔴 快捷方式生成异常: ' + e.message);
+  } finally {
+    try { if (fs.existsSync(tempPs)) fs.unlinkSync(tempPs); } catch (e) {}
+  }
 
-  console.log(`[2] 官方原厂快捷方式: 🟢 已就绪 -> ${officialLnk}`);
-  console.log(`    - 目标程序: ${appExe}`);
-  console.log('    - 启动参数: (无参数，原版直连)');
-  console.log('    - 工作目录: ' + appDir);
-
-  // 2. 桌面环境卫生核验（绝对 0 BAT，绝不留外挂）
-  const desktopFiles = fs.readdirSync(desktopDir);
-  const batFiles = desktopFiles.filter(f => f.toLowerCase().endsWith('.bat') && f.toLowerCase().includes('antigravity'));
-  if (batFiles.length > 0) {
-    for (const b of batFiles) {
-      try {
-        fs.unlinkSync(path.join(desktopDir, b));
-        console.log(`    🧹 已清理桌面遗留批处理外挂: ${b}`);
-      } catch (e) {}
+  // 2. 桌面环境卫生核验（安全提示，绝不静默删除用户脚本）
+  try {
+    const desktopFiles = fs.readdirSync(desktopDir);
+    const batFiles = desktopFiles.filter(f => f.toLowerCase().endsWith('.bat') && f.toLowerCase().includes('antigravity'));
+    if (batFiles.length > 0) {
+      console.log(`[3] 桌面脚本安全提示: 🟡 发现存在批处理脚本: ${batFiles.join(', ')}（建议优先使用原版直连快捷方式）。`);
+    } else {
+      console.log('[3] 桌面安全合规检查: 🟢 100% 纯净，无外挂批处理启动器。');
     }
-  } else {
-    console.log('[3] 桌面安全合规检查: 🟢 100% 纯净，无任何 .bat 批处理外挂污染。');
+  } catch (e) {
+    console.log('[3] 桌面目录扫描提示: ' + e.message);
   }
 
   console.log('\n========================================');
   console.log('  官方原厂直连治理完成');
   console.log('========================================');
+
+  return { ok: true, lnk: officialLnk };
 }
 
 if (require.main === module) {
   run();
 }
 
-module.exports = { run, getDesktopDir };
+module.exports = { run, getDesktopDir, findOfficialApp };
