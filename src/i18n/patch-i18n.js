@@ -121,7 +121,25 @@ function generateInjectorScript(dict) {
     'Message input': '消息输入框',
     'Typeahead menu': '快捷菜单',
     'Agent response': '智能体回复',
-    'User message': '用户消息'
+    'User message': '用户消息',
+    'Browse': '浏览',
+    'Browse rules': '浏览规则',
+    'Search conversations': '搜索会话',
+    'No matching results': '未找到匹配结果',
+    'Searching…': '搜索中…',
+    'Searching...': '搜索中...',
+    'New tab': '新建标签页',
+    'View Diff': '查看差异',
+    'Refresh': '刷新',
+    'Toggle sidebar': '切换侧边栏',
+    'Close': '关闭',
+    'File Viewer': '文件查看器',
+    'File Viewer header': '文件查看器标题栏',
+    'File path breadcrumbs': '文件路径面包屑',
+    'Learning Proposal': '经验固化提议',
+    'Close Learning Proposal': '关闭经验固化提议',
+    'Close Review': '关闭审查',
+    'Conversation turns': '会话轮次'
   };
 
   const EXCLUDE_SELECTOR = 'code, pre, kbd, samp, textarea, input, style, script, noscript, [contenteditable="true"], .prose, .markdown, [class*="chat-message"], [class*="group/file-title"], [data-testid="conversation-row-sidebar"] a[href^="/c/"], [data-testid="conversation-row-sidebar"] span.truncate';
@@ -157,6 +175,9 @@ function generateInjectorScript(dict) {
   const RE_ARIA_PROJECT = /^Select project, current:\\s*(.*)$/i;
   const RE_USED_LIMIT = /^You have used (some|all|most) of your (weekly|5-hour|five-hour|daily) limit,?\\s*it will fully refresh in (.*)\\.?$/i;
   const RE_NOT_USED_LIMIT = /^You have not used any of your (weekly|5-hour|five-hour|daily) limit\\.?$/i;
+  const RE_TURNS = /^(\\d+)\\s+turns?$/i;
+  const RE_DATE_TURNS = /,\\s*(\\d+)\\s+turns?$/i;
+  const RE_CLOSE_TARGET = /^Close\\s+(.*)$/i;
 
   function isExcludedElement(el) {
     if (!el || el.nodeType !== 1) return true;
@@ -246,6 +267,19 @@ function generateInjectorScript(dict) {
     if (trimmed.startsWith('ONLY for the native-swarm worker whose brief says it is the narrator')) {
       return '【蜂群播报与汇总器】专用于蜂群协作汇总，实时观察看板并在协调员完成攻坚后生成最终交付报告。';
     }
+
+    // 内置二进制命令描述（如 /learn 等由 language_server 输出的指令）
+    if (trimmed.startsWith('Reflect on recent successes or corrections to capture reusable skills or rules')) {
+      return '总结近期的成功经验或纠偏教训，沉淀为可复用的技能或规则。';
+    }
+    if (trimmed.startsWith('Unlock the power of agent swarms')) {
+      return '释放智能体蜂群的并行协作潜能。';
+    }
+    if (trimmed === 'Browse') return '浏览';
+    if (trimmed === 'Browse rules') return '浏览规则';
+    if (trimmed === 'Search conversations' || trimmed === 'Search Conversations') return '搜索会话';
+    if (trimmed === 'No matching results') return '未找到匹配结果';
+    if (trimmed === 'Searching…' || trimmed === 'Searching...') return '搜索中…';
 
     // 常用 MCP 扩展工具描述（如 rea 等逆向与分析工具）前缀映射
     if (trimmed.startsWith('Trace a feature through relevant artifact')) {
@@ -388,6 +422,20 @@ function generateInjectorScript(dict) {
 
       const mRun = atrim.match(RE_RUNNING);
       if (mRun) return '正在执行 ' + mRun[1];
+
+      const mClose = atrim.match(RE_CLOSE_TARGET);
+      if (mClose) {
+        const tgt = mClose[1].trim();
+        return '关闭 ' + (DICT[tgt] || tgt);
+      }
+
+      if (RE_DATE_TURNS.test(atrim)) {
+        return atrim.replace(RE_DATE_TURNS, ', $1 轮对话');
+      }
+
+      if (RE_TURNS.test(atrim)) {
+        return atrim.replace(RE_TURNS, '$1 轮对话');
+      }
 
       return null;
     });

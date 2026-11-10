@@ -1,9 +1,9 @@
 /**
- * Antigravity CN Toolkit - 全景技能与元数据地毯式本地化治理器
+ * Antigravity CN Toolkit - 全景技能与插件元数据地毯式本地化治理器
  * 核心设计原则：
- * 1. 根治“打地鼠式被动汉化”：一次性扫描官方内置全量技能库，地毯式完成源头本地化；
+ * 1. 根治“打地鼠式被动汉化”：一次性扫描官方内置与用户配置全量技能与插件库，地毯式完成源头本地化；
  * 2. 安全幂等可逆：就地修改前自动生成 .orig 备份，多次重复执行不破坏文件；
- * 3. 前端与源头双轨合一：源头 SKILL.md 改为纯中文，彻底消除 DOM 截断与匹配遗漏。
+ * 3. 前端与源头双轨合一：源头 SKILL.md 与 plugin.json 改为纯中文，彻底消除 DOM 截断与匹配遗漏。
  */
 const fs = require('fs');
 const path = require('path');
@@ -65,12 +65,29 @@ const BUILTIN_SKILLS_MAP = {
   }
 };
 
+// 官方内置与已知插件标准中文对照库
+const BUILTIN_PLUGINS_MAP = {
+  'swarm': {
+    displayName: '蜂群多智能体协作',
+    description: '【蜂群多智能体协作】释放智能体蜂群的并行协作潜能。'
+  },
+  'egm': {
+    displayName: '大象与金鱼模型 (EGM)',
+    description: 'Google 开源的规范驱动开发与零上下文多维冷读评审框架。'
+  }
+};
+
 /**
- * 探测官方内置技能目录路径
+ * 探测目录路径
  */
-function getBuiltinSkillsDir() {
+function getTargetDirs() {
   const userProfile = process.env.USERPROFILE || os.homedir();
-  return path.join(userProfile, '.gemini', 'antigravity', 'builtin', 'skills');
+  return {
+    builtinSkills: path.join(userProfile, '.gemini', 'antigravity', 'builtin', 'skills'),
+    builtinPlugins: path.join(userProfile, '.gemini', 'antigravity', 'builtin', 'plugins'),
+    configSkills: path.join(userProfile, '.gemini', 'config', 'skills'),
+    configPlugins: path.join(userProfile, '.gemini', 'config', 'plugins')
+  };
 }
 
 /**
@@ -80,10 +97,8 @@ function updateSkillDescription(filePath, newDesc) {
   if (!fs.existsSync(filePath)) return false;
   const content = fs.readFileSync(filePath, 'utf8');
 
-  // 若已经是目标中文，跳过不重复修改
   if (content.includes(newDesc)) return false;
 
-  // 写入安全原版备份 (.orig)
   const origPath = filePath + '.orig';
   if (!fs.existsSync(origPath)) {
     try {
@@ -91,7 +106,6 @@ function updateSkillDescription(filePath, newDesc) {
     } catch (e) {}
   }
 
-  // 严格替换 frontmatter 中的 description 字段
   const reDesc = /description:\s*(?:>-\s*)?([\s\S]*?)(?=\n[a-z0-9_-]+:|\n---)/i;
   if (!reDesc.test(content)) return false;
 
@@ -101,39 +115,94 @@ function updateSkillDescription(filePath, newDesc) {
 }
 
 /**
- * 执行全景技能地毯式本地化治理
+ * 安全地就地更新 plugin.json 的 displayName 和 description
+ */
+function updatePluginJson(filePath, meta) {
+  if (!fs.existsSync(filePath)) return false;
+  try {
+    const raw = fs.readFileSync(filePath, 'utf8');
+    const json = JSON.parse(raw);
+    let changed = false;
+
+    if (meta.displayName && json.displayName !== meta.displayName) {
+      json.displayName = meta.displayName;
+      changed = true;
+    }
+    if (meta.description && json.description !== meta.description) {
+      json.description = meta.description;
+      changed = true;
+    }
+
+    if (changed) {
+      const origPath = filePath + '.orig';
+      if (!fs.existsSync(origPath)) {
+        try {
+          fs.copyFileSync(filePath, origPath);
+        } catch (e) {}
+      }
+      fs.writeFileSync(filePath, JSON.stringify(json, null, 2), 'utf8');
+      return true;
+    }
+  } catch (e) {}
+  return false;
+}
+
+/**
+ * 执行全景技能与插件地毯式本地化治理
  */
 function run() {
   console.log('========================================');
-  console.log('  官方内置技能全景地毯式本地化治理');
+  console.log('  官方内置技能与插件全景地毯式本地化治理');
   console.log('========================================\n');
 
-  const builtinDir = getBuiltinSkillsDir();
-  if (!fs.existsSync(builtinDir)) {
-    console.log('  ⚪ 未检测到官方内置技能目录，跳过内置技能治理。');
-    return { ok: false, updatedCount: 0 };
-  }
-
+  const dirs = getTargetDirs();
   let updatedCount = 0;
   let totalCount = 0;
 
-  for (const [folderName, info] of Object.entries(BUILTIN_SKILLS_MAP)) {
-    const skillPath = path.join(builtinDir, folderName, 'SKILL.md');
-    if (fs.existsSync(skillPath)) {
-      totalCount++;
-      const changed = updateSkillDescription(skillPath, info.desc);
-      if (changed) {
-        console.log(`  🟢 [汉化完成] ${info.name} -> ${info.desc.slice(0, 45)}...`);
-        updatedCount++;
-      } else {
-        console.log(`  ⚪ [已是纯中文] ${info.name}`);
+  // 1. 扫描治理内置技能
+  if (fs.existsSync(dirs.builtinSkills)) {
+    for (const [folderName, info] of Object.entries(BUILTIN_SKILLS_MAP)) {
+      const skillPath = path.join(dirs.builtinSkills, folderName, 'SKILL.md');
+      if (fs.existsSync(skillPath)) {
+        totalCount++;
+        const changed = updateSkillDescription(skillPath, info.desc);
+        if (changed) {
+          console.log(`  🟢 [技能汉化完成] ${info.name} -> ${info.desc.slice(0, 40)}...`);
+          updatedCount++;
+        } else {
+          console.log(`  ⚪ [技能已纯中文] ${info.name}`);
+        }
       }
     }
   }
 
-  console.log(`\n  全景治理统计: 扫描 ${totalCount} 项内置技能，本轮更新 ${updatedCount} 项`);
+  // 2. 扫描治理内置与配置插件
+  const pluginDirs = [dirs.builtinPlugins, dirs.configPlugins];
+  for (const pDir of pluginDirs) {
+    if (fs.existsSync(pDir)) {
+      const subDirs = fs.readdirSync(pDir);
+      for (const sub of subDirs) {
+        const pJson = path.join(pDir, sub, 'plugin.json');
+        if (fs.existsSync(pJson)) {
+          totalCount++;
+          const meta = BUILTIN_PLUGINS_MAP[sub];
+          if (meta) {
+            const changed = updatePluginJson(pJson, meta);
+            if (changed) {
+              console.log(`  🟢 [插件汉化完成] ${sub} -> ${meta.displayName} | ${meta.description.slice(0, 35)}...`);
+              updatedCount++;
+            } else {
+              console.log(`  ⚪ [插件已纯中文] ${sub}`);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  console.log(`\n  全景治理统计: 扫描 ${totalCount} 项技能与插件，本轮更新 ${updatedCount} 项`);
   console.log('========================================');
-  console.log('  官方内置技能全景治理就绪（源头纯中文）');
+  console.log('  官方内置技能与插件全景治理就绪（源头纯中文）');
   console.log('========================================\n');
 
   return { ok: true, totalCount, updatedCount };
@@ -141,6 +210,7 @@ function run() {
 
 module.exports = {
   BUILTIN_SKILLS_MAP,
+  BUILTIN_PLUGINS_MAP,
   run
 };
 
