@@ -1,9 +1,10 @@
 /**
- * 快捷方式原厂治理模块（统一相对转发）
- * 自适应相对定位，杜绝盘符硬编码
+ * 快捷方式原厂治理模块（统一自适应相对转发）
  */
 const path = require('path');
-const PROJECT_ROOT = path.resolve(__dirname, '..', '..');
+const { getProjectRoot } = require('./run-all');
+
+const PROJECT_ROOT = getProjectRoot();
 const shortcutsModule = require(path.join(PROJECT_ROOT, 'src', 'system', 'ensure-shortcuts.js'));
 
 if (require.main === module) {
