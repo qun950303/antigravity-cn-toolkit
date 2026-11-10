@@ -5,7 +5,7 @@
  * 2. 脏根节流防抖：O(N·深度) 脏根合并队列与 requestAnimationFrame 驱动，极端丝滑零卡顿；
  * 3. 死锁自愈能力：自动监测并释放设置面板可能触发的焦点死锁；
  * 4. 严守红线 1（外观 100% 原生）：彻底剔除所有暖纸底色、蜡封框与外部 CSS，完美保持官方纯净原生质感；
- * 5. 严守红线 2（词典 100% 完整）：采用工程自带 514+ 项全量最新基准词典，全覆盖菜单、设置、指令与权限；
+ * 5. 严守红线 2（词典 100% 完整）：采用工程自带 504 项全量精选基准词典，全覆盖菜单、设置、指令与权限；
  * 6. 自适应环境适配：杜绝所有硬编码路径，全动态探测安装目录、解包工作区与 CDP 调试端口；
  * 7. 安全双重备份：覆盖前自动备份原厂 app.asar.backup，文件占用时安全降级至系统内核重启队列。
  */
@@ -636,8 +636,8 @@ function setPendingRename(paths) {
     $existing = (Get-ItemProperty -Path $path -Name $name -ErrorAction SilentlyContinue).$name
     if (-not $existing) { $existing = @() }
 
-    $src = '\\??\\${paths.patchedAsar}'
-    $dst = '\\??\\${paths.officialAsar}'
+    $src = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('${Buffer.from('\\??\\' + paths.patchedAsar, 'utf8').toString('base64')}'))
+    $dst = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('${Buffer.from('\\??\\' + paths.officialAsar, 'utf8').toString('base64')}'))
 
     $clean = [System.Collections.Generic.List[string]]::new()
     for ($i = 0; $i -lt $existing.Length; $i += 2) {
@@ -782,7 +782,7 @@ async function run() {
   // 1. 词典词条检查
   const dict = getMergedDict();
   const count = Object.keys(dict).length;
-  console.log(`[1] 核心词典容量: 🟢 ${count} 条标准对照（基准 514+ 项全量覆盖）`);
+  console.log(`[1] 核心词典容量: 🟢 ${count} 条标准对照（精纯词库全覆盖）`);
 
   // 2. 构建完全体 preload.js
   const { size, injectorCode } = buildPreloadInjector(paths);

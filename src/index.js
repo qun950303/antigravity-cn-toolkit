@@ -50,7 +50,7 @@ async function main() {
   console.log('\n');
 
   console.log('========================================');
-  console.log('          全局执行执行结果汇总          ');
+  console.log('            全局执行结果汇总            ');
   console.log('========================================');
   console.log(`[1] 网络环境配置: ${summary.network?.ok ? '🟢 成功' : '🔴 失败 (' + summary.network?.error + ')'}`);
   console.log(`[2] 完全体汉化引擎: ${summary.i18n?.ok ? '🟢 成功' : '🔴 失败 (' + summary.i18n?.error + ')'}`);

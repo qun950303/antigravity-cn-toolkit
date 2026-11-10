@@ -31,8 +31,7 @@ function findOfficialApp() {
     path.join(localAppData, 'Programs', 'antigravity', 'Antigravity.exe'),
     path.join(localAppData, 'Programs', 'Antigravity', 'Antigravity.exe'),
     path.join(process.env.PROGRAMFILES || 'C:\\Program Files', 'antigravity', 'Antigravity.exe'),
-    path.join(process.env['PROGRAMFILES(X86)'] || 'C:\\Program Files (x86)', 'antigravity', 'Antigravity.exe'),
-    'D:\\antigravity\\Antigravity.exe'
+    path.join(process.env['PROGRAMFILES(X86)'] || 'C:\\Program Files (x86)', 'antigravity', 'Antigravity.exe')
   ];
   for (const c of candidates) {
     if (fs.existsSync(c)) {
