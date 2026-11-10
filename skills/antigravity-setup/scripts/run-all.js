@@ -27,10 +27,13 @@ function getProjectRoot() {
   const candidates = [
     path.join(localAppData, 'antigravity-cn-toolkit'),
     path.join(homeDir, 'antigravity-cn-toolkit'),
-    path.join(homeDir, '.antigravity-cn-toolkit'),
-    'D:\\antigravity-cn-toolkit',
-    'C:\\antigravity-cn-toolkit'
+    path.join(homeDir, '.antigravity-cn-toolkit')
   ];
+  // 动态枚举可用驱动器根目录，杜绝写死单一固定盘符
+  const commonDrives = ['D:', 'C:', 'E:', 'F:'];
+  for (const d of commonDrives) {
+    candidates.push(path.join(d, path.sep, 'antigravity-cn-toolkit'));
+  }
   for (const c of candidates) {
     if (fs.existsSync(path.join(c, 'src', 'index.js'))) {
       return c;

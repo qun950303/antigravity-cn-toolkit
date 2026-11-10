@@ -33,10 +33,11 @@ function getProjectRoot() {
 
   // 模式二：全局/持久化目录降级回退
   const localAppData = process.env.LOCALAPPDATA || (process.env.USERPROFILE && path.join(process.env.USERPROFILE, 'AppData', 'Local'));
+  const homeDir = process.env.USERPROFILE || require('os').homedir();
   const candidates = [
     localAppData ? path.join(localAppData, 'antigravity-cn-toolkit') : null,
-    process.env.ANTIGRAVITY_TOOLKIT_ROOT,
-    'D:\\antigravity-cn-toolkit'
+    path.join(homeDir, 'antigravity-cn-toolkit'),
+    process.env.ANTIGRAVITY_TOOLKIT_ROOT
   ].filter(Boolean);
 
   for (const dir of candidates) {

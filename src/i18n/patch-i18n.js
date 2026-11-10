@@ -133,6 +133,12 @@ function generateInjectorScript(dict) {
     'Refresh': '刷新',
     'Toggle sidebar': '切换侧边栏',
     'Close': '关闭',
+    'Close All': '全部关闭',
+    'Close Others': '关闭其他',
+    'Close Other Tabs': '关闭其他标签页',
+    'Close Saved': '关闭未修改项',
+    'Close Tabs to the Right': '关闭右侧标签页',
+    'Close to the Right': '关闭右侧',
     'File Viewer': '文件查看器',
     'File Viewer header': '文件查看器标题栏',
     'File path breadcrumbs': '文件路径面包屑',
@@ -280,6 +286,10 @@ function generateInjectorScript(dict) {
     if (trimmed === 'Search conversations' || trimmed === 'Search Conversations') return '搜索会话';
     if (trimmed === 'No matching results') return '未找到匹配结果';
     if (trimmed === 'Searching…' || trimmed === 'Searching...') return '搜索中…';
+    if (trimmed === 'Close All') return '全部关闭';
+    if (trimmed === 'Close Others') return '关闭其他';
+    if (trimmed === 'Close Saved') return '关闭未修改项';
+    if (trimmed === 'Close to the Right') return '关闭右侧';
 
     // 常用 MCP 扩展工具描述（如 rea 等逆向与分析工具）前缀映射
     if (trimmed.startsWith('Trace a feature through relevant artifact')) {
@@ -426,6 +436,11 @@ function generateInjectorScript(dict) {
       const mClose = atrim.match(RE_CLOSE_TARGET);
       if (mClose) {
         const tgt = mClose[1].trim();
+        if (tgt === 'All' || tgt === 'all') return '全部关闭';
+        if (tgt === 'Others' || tgt === 'others') return '关闭其他';
+        if (tgt === 'Other Tabs') return '关闭其他标签页';
+        if (tgt === 'Saved') return '关闭未修改项';
+        if (tgt === 'Tabs to the Right' || tgt === 'to the Right') return '关闭右侧标签页';
         return '关闭 ' + (DICT[tgt] || tgt);
       }
 
