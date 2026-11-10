@@ -64,21 +64,15 @@ function getMergedDict() {
     }
   }
 
-  // 安全合并用户自定义覆盖词典 (如有)
-  const homeDir = os.homedir();
-  const userOverrideCandidates = [
-    path.join(homeDir, '.gemini', 'antigravity', 'theme-patch', 'user', 'i18n.override.json'),
-    path.join(PROJECT_ROOT, 'i18n.override.json')
-  ];
-  for (const extOverride of userOverrideCandidates) {
-    if (fs.existsSync(extOverride)) {
-      try {
-        const user = JSON.parse(fs.readFileSync(extOverride, 'utf8'));
-        for (const k of Object.keys(user)) {
-          if (k !== '_comment') dict[k] = user[k];
-        }
-      } catch (e) {}
-    }
+  // 安全合并用户自定义覆盖词典 (仅限主工程同级 i18n.override.json)
+  const userOverride = path.join(PROJECT_ROOT, 'i18n.override.json');
+  if (fs.existsSync(userOverride)) {
+    try {
+      const user = JSON.parse(fs.readFileSync(userOverride, 'utf8'));
+      for (const k of Object.keys(user)) {
+        if (k !== '_comment') dict[k] = user[k];
+      }
+    } catch (e) {}
   }
   return dict;
 }
@@ -92,7 +86,7 @@ function generateInjectorScript(dict) {
 (function() {
   if (window.top !== window) return;
 
-  const PATCH_VERSION = '20261110-v1.3.0-native';
+  const PATCH_VERSION = '20261110-v1.3.1-native';
   const DICT = ${JSON.stringify(dict)};
   const ATTR_MAP = {
     'Display Options': '显示选项',
@@ -172,10 +166,10 @@ function generateInjectorScript(dict) {
     if (!trimmed) return null;
 
     // 历史错误词条自愈纠偏
-    if (trimmed === '额度充裕') return raw.replace('额度充裕', '深度思考');
-    if (trimmed === '额度适中') return raw.replace('额度适中', '平衡思考');
-    if (trimmed === '额度紧张') return raw.replace('额度紧张', '轻量思考');
-    if (trimmed === '限额注意') return raw.replace('限额注意', '使用提示');
+    if (trimmed.includes('额度充裕')) return raw.replace(/额度充裕/g, '深度思考');
+    if (trimmed.includes('额度适中')) return raw.replace(/额度适中/g, '平衡思考');
+    if (trimmed.includes('额度紧张')) return raw.replace(/额度紧张/g, '轻量思考');
+    if (trimmed.includes('限额注意')) return raw.replace(/限额注意/g, '使用提示');
 
     let replacement = DICT[trimmed];
     if (typeof replacement !== 'string' && trimmed.endsWith('.')) {
