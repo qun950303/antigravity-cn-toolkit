@@ -6,6 +6,7 @@
 const { run: runNetwork } = require('./network/setup-network');
 const { run: runI18n } = require('./i18n/patch-i18n');
 const { run: runShortcuts } = require('./system/ensure-shortcuts');
+const { run: runLocalizeSkills } = require('./system/localize-skills');
 
 async function main() {
   console.log('╔══════════════════════════════════════════════════════╗');
@@ -16,7 +17,8 @@ async function main() {
   const summary = {
     network: null,
     i18n: null,
-    shortcuts: null
+    shortcuts: null,
+    skills: null
   };
 
   // 步骤一：网络环境检测与配置
@@ -49,14 +51,25 @@ async function main() {
   }
   console.log('\n');
 
+  // 步骤四：官方内置技能全景地毯式本地化治理
+  try {
+    const skRes = runLocalizeSkills();
+    summary.skills = { ok: true, data: skRes };
+  } catch (err) {
+    summary.skills = { ok: false, error: err.message };
+    console.error('❌ 技能全景本地化步骤异常:', err.message);
+  }
+  console.log('\n');
+
   console.log('========================================');
   console.log('            全局执行结果汇总            ');
   console.log('========================================');
   console.log(`[1] 网络环境配置: ${summary.network?.ok ? '🟢 成功' : '🔴 失败 (' + summary.network?.error + ')'}`);
   console.log(`[2] 完全体汉化引擎: ${summary.i18n?.ok ? '🟢 成功' : '🔴 失败 (' + summary.i18n?.error + ')'}`);
   console.log(`[3] 原厂快捷方式: ${summary.shortcuts?.ok ? '🟢 成功' : '🔴 失败 (' + summary.shortcuts?.error + ')'}`);
+  console.log(`[4] 内置技能全景汉化: ${summary.skills?.ok ? '🟢 成功' : '🔴 失败 (' + summary.skills?.error + ')'}`);
 
-  const allSuccess = summary.network?.ok && summary.i18n?.ok && summary.shortcuts?.ok;
+  const allSuccess = summary.network?.ok && summary.i18n?.ok && summary.shortcuts?.ok && summary.skills?.ok;
   if (allSuccess) {
     console.log('\n🎉 [Antigravity CN Toolkit] 全套配置已成功完成！');
     console.log('💡 随时在 Antigravity 中输入 /antigravity-setup 调用专属 Skill 进行健康自检。');

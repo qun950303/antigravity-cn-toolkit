@@ -229,7 +229,22 @@ function generateInjectorScript(dict) {
       return '发现与当前任务相关的 UI 插件面板，并在对话中提供一键展开药丸按钮。';
     }
     if (trimmed.startsWith('Configure allowed and denied URLs for the browser subagent')) {
-      return raw.replace(/Configure allowed and denied URLs for the browser subagent\\s*\\(invoked with \\/browser\\)\\.\\s*Requires?/i, '配置浏览器子代理（可通过 /browser 调用）允许与拒绝访问的 URL 规则。需要安装');
+      return raw.replace(/Configure allowed and denied URLs for the browser subagent\\s*\\(invoked with \\/browser\\)\\.\\s*Requires?/i, '配置浏览器子代理（可通过 /browser 调用）允许与拒绝访问的 URL规则。需要安装');
+    }
+    if (trimmed.startsWith('(Preview & Quota Heavy) Run a swarm') || trimmed.startsWith('Run a swarm: several agents working in parallel')) {
+      return '【蜂群多智能体协作】(预览/高额度消耗) 启动多个智能体在独立会话中并行协同攻坚，通过共享消息看板实时交互协作。';
+    }
+    if (trimmed.startsWith('Guidelines for interacting with GitHub and request permissions')) {
+      return '【GitHub 权限治理】安全合规地与 GitHub 交互，在执行敏感写操作与仓库变更时主动请求用户确认。';
+    }
+    if (trimmed.startsWith('How to write and run a dynamic workflow script with the run_workflow')) {
+      return '【动态工作流运行】通过脚本与确定性入口执行复杂的多阶段工作流。';
+    }
+    if (trimmed.startsWith('ONLY for the native-swarm worker whose brief says it is the monitor')) {
+      return '【蜂群巡检监视器】专用于蜂群协作监控，定期检测蜂群是否停滞并在异常时唤醒解死锁。';
+    }
+    if (trimmed.startsWith('ONLY for the native-swarm worker whose brief says it is the narrator')) {
+      return '【蜂群播报与汇总器】专用于蜂群协作汇总，实时观察看板并在协调员完成攻坚后生成最终交付报告。';
     }
 
     // 常用 MCP 扩展工具描述（如 rea 等逆向与分析工具）前缀映射
