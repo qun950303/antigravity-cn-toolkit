@@ -92,7 +92,7 @@ function generateInjectorScript(dict) {
 (function() {
   if (window.top !== window) return;
 
-  const PATCH_VERSION = '20261110-v1.2.0-native';
+  const PATCH_VERSION = '20261110-v1.3.0-native';
   const DICT = ${JSON.stringify(dict)};
   const ATTR_MAP = {
     'Display Options': '显示选项',
@@ -170,6 +170,12 @@ function generateInjectorScript(dict) {
     if (!raw) return null;
     const trimmed = raw.trim();
     if (!trimmed) return null;
+
+    // 历史错误词条自愈纠偏
+    if (trimmed === '额度充裕') return raw.replace('额度充裕', '深度思考');
+    if (trimmed === '额度适中') return raw.replace('额度适中', '平衡思考');
+    if (trimmed === '额度紧张') return raw.replace('额度紧张', '轻量思考');
+    if (trimmed === '限额注意') return raw.replace('限额注意', '使用提示');
 
     let replacement = DICT[trimmed];
     if (typeof replacement !== 'string' && trimmed.endsWith('.')) {

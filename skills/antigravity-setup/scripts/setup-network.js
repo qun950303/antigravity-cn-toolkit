@@ -1,8 +1,10 @@
 /**
- * 免 TUN 网络模块（统一转发主工程唯一源）
- * 单真实源：D:\antigravity-cn-toolkit\src\network\setup-network.js
+ * 免 TUN 网络模块（统一相对转发）
+ * 自适应相对定位，杜绝盘符硬编码
  */
-const networkModule = require('D:/antigravity-cn-toolkit/src/network/setup-network.js');
+const path = require('path');
+const PROJECT_ROOT = path.resolve(__dirname, '..', '..');
+const networkModule = require(path.join(PROJECT_ROOT, 'src', 'network', 'setup-network.js'));
 
 if (require.main === module) {
   networkModule.run().catch(console.error);

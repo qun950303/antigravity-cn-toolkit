@@ -1,8 +1,10 @@
 /**
- * 快捷方式原厂治理模块（统一转发主工程唯一源）
- * 单真实源：D:\antigravity-cn-toolkit\src\system\ensure-shortcuts.js
+ * 快捷方式原厂治理模块（统一相对转发）
+ * 自适应相对定位，杜绝盘符硬编码
  */
-const shortcutsModule = require('D:/antigravity-cn-toolkit/src/system/ensure-shortcuts.js');
+const path = require('path');
+const PROJECT_ROOT = path.resolve(__dirname, '..', '..');
+const shortcutsModule = require(path.join(PROJECT_ROOT, 'src', 'system', 'ensure-shortcuts.js'));
 
 if (require.main === module) {
   shortcutsModule.run();

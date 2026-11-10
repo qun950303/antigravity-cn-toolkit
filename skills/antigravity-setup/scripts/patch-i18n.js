@@ -1,8 +1,10 @@
 /**
- * 完全体汉化引擎模块（统一转发主工程唯一源）
- * 单真实源：D:\antigravity-cn-toolkit\src\i18n\patch-i18n.js
+ * 完全体汉化引擎模块（统一相对转发）
+ * 自适应相对定位，杜绝盘符硬编码
  */
-const i18nModule = require('D:/antigravity-cn-toolkit/src/i18n/patch-i18n.js');
+const path = require('path');
+const PROJECT_ROOT = path.resolve(__dirname, '..', '..');
+const i18nModule = require(path.join(PROJECT_ROOT, 'src', 'i18n', 'patch-i18n.js'));
 
 if (require.main === module) {
   i18nModule.run().catch(console.error);
