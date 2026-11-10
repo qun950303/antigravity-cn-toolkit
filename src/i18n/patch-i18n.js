@@ -232,6 +232,26 @@ function generateInjectorScript(dict) {
       return raw.replace(/Configure allowed and denied URLs for the browser subagent\\s*\\(invoked with \\/browser\\)\\.\\s*Requires?/i, '配置浏览器子代理（可通过 /browser 调用）允许与拒绝访问的 URL 规则。需要安装');
     }
 
+    // 常用 MCP 扩展工具描述（如 rea 等逆向与分析工具）前缀映射
+    if (trimmed.startsWith('Trace a feature through relevant artifact')) {
+      return '通过关联工件、符号与函数证据追踪功能实现，并区分观测行为与推论。';
+    }
+    if (trimmed.startsWith('Compare two shipped application artifacts through complete inventory')) {
+      return '通过完整清单与结构对比两个发布应用工件的差异。';
+    }
+    if (trimmed.startsWith('Evaluate a finite reconstruction specification against retained Evidence')) {
+      return '对照留存证据评估程序还原规格说明的准确性与完整度。';
+    }
+    if (trimmed.startsWith('Correlate a crash symptom with static call and reference evidence')) {
+      return '将崩溃现象与静态调用链、引用证据及进程捕获记录相关联分析。';
+    }
+    if (trimmed.startsWith('Review current residual-unknown heads against retained evidence')) {
+      return '结合留存证据审查当前遗留的未知项，确保分析完整度。';
+    }
+    if (trimmed.startsWith('Choose a command, inputs, observations, and stopping conditions')) {
+      return '为进程捕获设定目标命令、输入参数、观测项与停止条件。';
+    }
+
     // 动态相对时间与动作状态
     const mTime = trimmed.match(RE_TIME_AGO);
     if (mTime) {
